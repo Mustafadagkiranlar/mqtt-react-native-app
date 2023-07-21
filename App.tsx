@@ -4,8 +4,7 @@
  *
  * @format
  */
-
-import React, { useEffect, useState } from 'react';
+import React, {useEffect, useState} from 'react';
 import init from 'react_native_mqtt';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {PropsWithChildren} from 'react';
@@ -19,9 +18,8 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import {
-  Colors,
-} from 'react-native/Libraries/NewAppScreen';
+import {Colors} from 'react-native/Libraries/NewAppScreen';
+import {Toast} from 'react-native-toast-message/lib/src/Toast';
 
 type SectionProps = PropsWithChildren<{
   title: string;
@@ -29,6 +27,7 @@ type SectionProps = PropsWithChildren<{
 
 function Section({children, title}: SectionProps): JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
+
   return (
     <View style={styles.sectionContainer}>
       <Text
@@ -40,15 +39,7 @@ function Section({children, title}: SectionProps): JSX.Element {
         ]}>
         {title}
       </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
+      {children}
     </View>
   );
 }
@@ -56,7 +47,7 @@ function Section({children, title}: SectionProps): JSX.Element {
 function App(): JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
   const [message, setMessage] = useState('No Message Received');
-  
+
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
@@ -67,75 +58,94 @@ function App(): JSX.Element {
     defaultExpires: 1000 * 3600 * 24,
     enableCache: true,
     reconnect: true,
-    sync : {}
+    sync: {},
   });
 
   const client = new Paho.MQTT.Client('broker.hivemq.com', 8000, 'uname');
   client.onMessageArrived = onMessageArrived;
   client.onConnectionLost = onConnectionLost;
 
-
   useEffect(() => {
     console.log('useEffect');
-    client.connect({ onSuccess:onConnect, useSSL: false });
+    client.connect({onSuccess: onConnect, useSSL: false});
   }, []);
-  
-
 
   function onConnect() {
-    console.log("onConnect");
+    console.log('onConnect');
     client.subscribe('testtopic/155911');
   }
-  
+
   function onConnectionLost(responseObject) {
     if (responseObject.errorCode !== 0) {
-      console.log("onConnectionLost:"+responseObject.errorMessage);
+      console.log('onConnectionLost:' + responseObject.errorMessage);
     }
   }
-  
+
   function onMessageArrived(message) {
-    var x = "\nTopic : "+message.topic+"\nMessage : "+message.payloadString;
-    setMessage(x);
-    console.log(x);
+    var mqttMessage = message.payloadString;
+    setMessage(mqttMessage);
+    console.log(mqttMessage);
   }
 
-  function publishMessage(message: string,destination: string) {
-    var message = new Paho.MQTT.Message(message);
-    message.destinationName = destination;
-    client.send(message);
+  function publishMessage(message: string, destination: string) {
+    try {
+      var message = new Paho.MQTT.Message(message);
+      message.destinationName = destination;
+      client.send(message);
+    } catch (e) {
+      console.log('publishMessage Function: ' + e);
+      client.connect({onSuccess: onConnect, useSSL: false});
+      Toast.show({
+        type: 'info',
+        text1: 'Hata',
+        text2: 'Tekrar Deneyiniz'
+      });
+    }
   }
-  
-
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title='Send Message'>
-            <Button title='Send Data' onPress={() => publishMessage('Hello World','testtopic/155911')}/>
-          </Section>
+    <>
+      <SafeAreaView style={backgroundStyle}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={backgroundStyle.backgroundColor}
+        />
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          style={backgroundStyle}>
+          <View
+            style={{
+              backgroundColor: isDarkMode ? Colors.black : Colors.white,
+            }}>
+            <Section title="FARM DATAS">
+              <Text style={styles.highlight}>{message}</Text>
+            </Section>
 
-          <Section title='Receive Message'>
-            <Text style={styles.highlight}>{message}</Text>
-
-          </Section>
-
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+            <Section title="CONTROL YOUR FARM">
+              <View style={styles.buttonContainer}>
+                <Button
+                  title="START IRRIGATION"
+                  onPress={() => publishMessage('OPEN', 'testtopic/155912')}
+                />
+              </View>
+              <View style={styles.buttonContainer}>
+                <Button
+                  title="STOP IRRIGATION"
+                  onPress={() => publishMessage('CLOSE', 'testtopic/155912')}
+                />
+              </View>
+              <View style={styles.buttonContainer}>
+                <Button
+                  title="SPECIAL IRRIGATION"
+                  onPress={() => publishMessage('SPECIAL', 'testtopic/155912')}
+                />
+              </View>
+            </Section>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+      <Toast />
+    </>
   );
 }
 
@@ -155,6 +165,9 @@ const styles = StyleSheet.create({
   },
   highlight: {
     fontWeight: '700',
+  },
+  buttonContainer: {
+    marginTop: 10,
   },
 });
 
